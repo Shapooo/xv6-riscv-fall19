@@ -38,7 +38,7 @@ acquire(struct spinlock *lk)
     panic("acquire");
 
   __sync_fetch_and_add(&(lk->n), 1);
-    
+
   // On RISC-V, sync_lock_test_and_set turns into an atomic swap:
   //   a5 = 1
   //   s1 = &lk->locked
@@ -46,7 +46,7 @@ acquire(struct spinlock *lk)
   while(__sync_lock_test_and_set(&lk->locked, 1) != 0) {
      __sync_fetch_and_add(&lk->nts, 1);
   }
-  
+
   // Tell the C compiler and the processor to not move loads or stores
   // past this point, to ensure that the critical section's memory
   // references happen strictly after the lock is acquired.
@@ -91,7 +91,7 @@ int
 holding(struct spinlock *lk)
 {
   int r;
-  push_off();
+  push_off();      /* Why disable intr here? Or why only wrap this statement? */
   r = (lk->locked && lk->cpu == mycpu());
   pop_off();
   return r;
@@ -128,7 +128,7 @@ pop_off(void)
 void
 print_lock(struct spinlock *lk)
 {
-  if(lk->n > 0) 
+  if(lk->n > 0)
     printf("lock: %s: #test-and-set %d #acquire() %d\n", lk->name, lk->nts, lk->n);
 }
 
@@ -137,7 +137,7 @@ sys_ntas(void)
 {
   int zero = 0;
   int tot = 0;
-  
+
   if (argint(0, &zero) < 0) {
     return -1;
   }

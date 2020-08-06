@@ -1,3 +1,4 @@
+#include "kalloc.h"
 // Saved registers for kernel context switches.
 struct context {
   uint64 ra;
@@ -24,6 +25,7 @@ struct cpu {
   struct context scheduler;   // swtch() here to enter scheduler().
   int noff;                   // Depth of push_off() nesting.
   int intena;                 // Were interrupts enabled before push_off()?
+  struct kmem_t kmem;
 };
 
 extern struct cpu cpus[NCPU];
