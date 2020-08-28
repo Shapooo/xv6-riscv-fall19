@@ -135,7 +135,7 @@ main(int argc, char *argv[])
       shortname = argv[i] + 5;
     else
       shortname = argv[i];
-    
+
     assert(index(shortname, '/') == 0);
 
     if((fd = open(argv[i], 0)) < 0){
@@ -267,7 +267,7 @@ iappend(uint inum, void *xp, int n)
   uint fbn, off, n1;
   struct dinode din;
   char buf[BSIZE];
-  uint indirect[NINDIRECT];
+  uint indirect[NLVL2];
   uint x;
 
   rinode(inum, &din);
@@ -276,21 +276,21 @@ iappend(uint inum, void *xp, int n)
   while(n > 0){
     fbn = off / BSIZE;
     assert(fbn < MAXFILE);
-    if(fbn < NDIRECT){
+    if(fbn < NLVL1){
       if(xint(din.addrs[fbn]) == 0){
         din.addrs[fbn] = xint(freeblock++);
       }
       x = xint(din.addrs[fbn]);
     } else {
-      if(xint(din.addrs[NDIRECT]) == 0){
-        din.addrs[NDIRECT] = xint(freeblock++);
+      if(xint(din.addrs[NLVL1]) == 0){
+        din.addrs[NLVL1] = xint(freeblock++);
       }
-      rsect(xint(din.addrs[NDIRECT]), (char*)indirect);
-      if(indirect[fbn - NDIRECT] == 0){
-        indirect[fbn - NDIRECT] = xint(freeblock++);
-        wsect(xint(din.addrs[NDIRECT]), (char*)indirect);
+      rsect(xint(din.addrs[NLVL1]), (char*)indirect);
+      if(indirect[fbn - NLVL1] == 0){
+        indirect[fbn - NLVL1] = xint(freeblock++);
+        wsect(xint(din.addrs[NLVL1]), (char*)indirect);
       }
-      x = xint(indirect[fbn-NDIRECT]);
+      x = xint(indirect[fbn-NLVL1]);
     }
     n1 = min(n, (fbn + 1) * BSIZE - off);
     rsect(x, buf);
