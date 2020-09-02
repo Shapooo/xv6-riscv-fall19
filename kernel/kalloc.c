@@ -10,7 +10,8 @@
 #include "defs.h"
 #include "proc.h"
 
-void freerange(void *pa_start, void *pa_end);
+void
+freerange(void* pa_start, void* pa_end);
 
 extern char end[]; // first address after kernel.
                    // defined by kernel.ld.
@@ -26,9 +27,10 @@ kinit()
   freerange(end, (void*)PHYSTOP);
 }
 
-inline void fr(void *pa, int n)
+inline void
+fr(void* pa, int n)
 {
-  struct run *r;
+  struct run* r;
 
   // Fill with junk to catch dangling refs.
   memset(pa, 1, PGSIZE);
@@ -42,14 +44,13 @@ inline void fr(void *pa, int n)
 }
 
 void
-freerange(void *pa_start, void *pa_end)
+freerange(void* pa_start, void* pa_end)
 {
-  char *p;
+  char* p;
   int count = 0;
 
   p = (char*)PGROUNDUP((uint64)pa_start);
-  for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE)
-    /* kfree(p); */
+  for (; p + PGSIZE <= (char*)pa_end; p += PGSIZE)
     fr(p, (count++) % NCPU);
 }
 
@@ -58,11 +59,11 @@ freerange(void *pa_start, void *pa_end)
 // call to kalloc().  (The exception is when
 // initializing the allocator; see kinit above.)
 void
-kfree(void *pa)
+kfree(void* pa)
 {
   int n;
 
-  if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
+  if (((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
 
   n = mycpu() - cpus;
@@ -72,34 +73,33 @@ kfree(void *pa)
 // Allocate one 4096-byte page of physical memory.
 // Returns a pointer that the kernel can use.
 // Returns 0 if the memory cannot be allocated.
-void *
+void*
 kalloc(void)
 {
-  struct run *r;
+  struct run* r;
   int n;
 
   n = mycpu() - cpus;
 
   acquire(&cpus[n].kmem.lock);
   r = cpus[n].kmem.freelist;
-  release(&cpus[n].kmem.lock);
-
-  if (r == 0) {
-    for (int i = NCPU - 1; i >= 0; --i) {
-      acquire(&cpus[i].kmem.lock);
-      r = cpus[i].kmem.freelist;
-      cpus[i].kmem.freelist = 0;
-      release(&cpus[i].kmem.lock);
-      if (r)
-        break;
-    }
-  }
-
   if (r) {
-    acquire(&cpus[n].kmem.lock);
     cpus[n].kmem.freelist = r->next;
     release(&cpus[n].kmem.lock);
     memset((char*)r, 5, PGSIZE); // fill with junk
+  } else {
+    release(&cpus[n].kmem.lock);
+    for (int i = NCPU - 1; i >= 0; --i) {
+      acquire(&cpus[i].kmem.lock);
+      r = cpus[i].kmem.freelist;
+      if (r) {
+        cpus[i].kmem.freelist = r->next;
+        release(&cpus[i].kmem.lock);
+        memset((char*)r, 5, PGSIZE); // fill with junk
+        break;
+      } else
+        release(&cpus[i].kmem.lock);
+    }
   }
 
   return (void*)r;
