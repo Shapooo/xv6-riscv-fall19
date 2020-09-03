@@ -1,5 +1,8 @@
+#ifndef __FS_H__
+#define __FS_H__
 // On-disk file system format.
 // Both the kernel and user programs use this header file.
+#include "types.h"
 
 
 #define ROOTINO  1   // root i-number
@@ -57,4 +60,4 @@ struct dirent {
   ushort inum;
   char name[DIRSIZ];
 };
-
+#endif // __FS_H__

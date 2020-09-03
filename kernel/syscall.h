@@ -1,3 +1,6 @@
+#ifndef __SYSCALL_H__
+#define __SYSCALL_H__
+
 // System call numbers
 #define SYS_fork    1
 #define SYS_exit    2
@@ -23,3 +26,4 @@
 
 // System calls for labs
 #define SYS_ntas   22
+#endif // __SYSCALL_H__

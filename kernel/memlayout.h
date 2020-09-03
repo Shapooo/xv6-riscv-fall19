@@ -1,3 +1,6 @@
+#ifndef __MEMLAYOUT_H__
+#define __MEMLAYOUT_H__
+
 // Physical memory layout
 
 // qemu -machine virt is set up like this,
@@ -6,8 +9,8 @@
 // 00001000 -- boot ROM, provided by qemu
 // 02000000 -- CLINT
 // 0C000000 -- PLIC
-// 10000000 -- uart0 
-// 10001000 -- virtio disk 
+// 10000000 -- uart0
+// 10001000 -- virtio disk
 // 80000000 -- boot ROM jumps here in machine mode
 //             -kernel loads the kernel here
 // unused RAM after 80000000.
@@ -66,3 +69,4 @@
 //   TRAPFRAME (p->tf, used by the trampoline)
 //   TRAMPOLINE (the same page as in the kernel)
 #define TRAPFRAME (TRAMPOLINE - PGSIZE)
+#endif // __MEMLAYOUT_H__
