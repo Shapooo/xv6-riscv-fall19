@@ -1,3 +1,8 @@
+#ifndef __DEFS_H__
+#define __DEFS_H__
+#include "types.h"
+#include "riscv.h"
+
 struct buf;
 struct context;
 struct file;
@@ -206,3 +211,4 @@ void lst_push(struct list*, void *);
 void *lst_pop(struct list*);
 void lst_print(struct list*);
 int lst_empty(struct list*);
+#endif // __DEFS_H__

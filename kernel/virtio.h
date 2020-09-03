@@ -1,3 +1,6 @@
+#ifndef __VIRTIO_H__
+#define __VIRTIO_H__
+#include "types.h"
 //
 // virtio device definitions.
 // for both the mmio interface, and virtio descriptors.
@@ -70,3 +73,4 @@ struct UsedArea {
   uint16 id;
   struct VRingUsedElem elems[NUM];
 };
+#endif // __VIRTIO_H__
