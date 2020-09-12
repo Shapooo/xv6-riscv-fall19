@@ -390,7 +390,7 @@ sys_chdir(void)
   char path[MAXPATH];
   struct inode *ip;
   struct proc *p = myproc();
-  
+
   begin_op(ROOTDEV);
   if(argstr(0, path, MAXPATH) < 0 || (ip = namei(path)) == 0){
     end_op(ROOTDEV);
@@ -442,13 +442,13 @@ sys_exec(void)
   int ret = exec(path, argv);
 
   for(i = 0; i < NELEM(argv) && argv[i] != 0; i++)
-    kfree(argv[i]);
+    kderef(argv[i]);
 
   return ret;
 
  bad:
   for(i = 0; i < NELEM(argv) && argv[i] != 0; i++)
-    kfree(argv[i]);
+    kderef(argv[i]);
   return -1;
 }
 
@@ -482,4 +482,3 @@ sys_pipe(void)
   }
   return 0;
 }
-

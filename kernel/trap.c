@@ -41,22 +41,22 @@ usertrap(void)
 {
   int which_dev = 0;
 
-  if((r_sstatus() & SSTATUS_SPP) != 0)
+  if ((r_sstatus() & SSTATUS_SPP) != 0)
     panic("usertrap: not from user mode");
 
   // send interrupts and exceptions to kerneltrap(),
   // since we're now in the kernel.
   w_stvec((uint64)kernelvec);
 
-  struct proc *p = myproc();
-  
+  struct proc* p = myproc();
+
   // save user program counter.
   p->tf->epc = r_sepc();
-  
-  if(r_scause() == 8){
+
+  if (r_scause() == 8) {
     // system call
 
-    if(p->killed)
+    if (p->killed)
       exit(-1);
 
     // sepc points to the ecall instruction,
@@ -68,19 +68,27 @@ usertrap(void)
     intr_on();
 
     syscall();
-  } else if((which_dev = devintr()) != 0){
-    // ok
+  } else if ((which_dev = devintr()) != 0) {
+    /* Exception Code 15: Store/AMO page fault */
+  } else if (r_scause() == 15) {
+    uint64 fault_addr = r_stval();
+    if (fault_addr >= p->sz || cow_handle(p->pagetable, fault_addr) < 0) {
+      p->killed = 1;
+    }
   } else {
-    printf("usertrap(): unexpected scause %p (%s) pid=%d\n", r_scause(), scause_desc(r_scause()), p->pid);
+    printf("usertrap(): unexpected scause %p (%s) pid=%d\n",
+           r_scause(),
+           scause_desc(r_scause()),
+           p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     p->killed = 1;
   }
 
-  if(p->killed)
+  if (p->killed)
     exit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
+  if (which_dev == 2)
     yield();
 
   usertrapret();
@@ -110,7 +118,7 @@ usertrapret(void)
 
   // set up the registers that trampoline.S's sret will use
   // to get to user space.
-  
+
   // set S Previous Privilege mode to User.
   unsigned long x = r_sstatus();
   x &= ~SSTATUS_SPP; // clear SPP to 0 for user mode
@@ -123,7 +131,7 @@ usertrapret(void)
   // tell trampoline.S the user page table to switch to.
   uint64 satp = MAKE_SATP(p->pagetable);
 
-  // jump to trampoline.S at the top of memory, which 
+  // jump to trampoline.S at the top of memory, which
   // switches to the user page table, restores user registers,
   // and switches to user mode with sret.
   uint64 fn = TRAMPOLINE + (userret - trampoline);
@@ -132,14 +140,14 @@ usertrapret(void)
 
 // interrupts and exceptions from kernel code go here via kernelvec,
 // on whatever the current kernel stack is.
-void 
+void
 kerneltrap()
 {
   int which_dev = 0;
   uint64 sepc = r_sepc();
   uint64 sstatus = r_sstatus();
   uint64 scause = r_scause();
-  
+
   if((sstatus & SSTATUS_SPP) == 0)
     panic("kerneltrap: not from supervisor mode");
   if(intr_get() != 0)
@@ -207,7 +215,7 @@ devintr()
     if(cpuid() == 0){
       clockintr();
     }
-    
+
     // acknowledge the software interrupt by clearing
     // the SSIP bit in sip.
     w_sip(r_sip() & ~2);
@@ -222,40 +230,40 @@ static const char *
 scause_desc(uint64 stval)
 {
   static const char *intr_desc[16] = {
-    [0] "user software interrupt",
-    [1] "supervisor software interrupt",
-    [2] "<reserved for future standard use>",
-    [3] "<reserved for future standard use>",
-    [4] "user timer interrupt",
-    [5] "supervisor timer interrupt",
-    [6] "<reserved for future standard use>",
-    [7] "<reserved for future standard use>",
-    [8] "user external interrupt",
-    [9] "supervisor external interrupt",
-    [10] "<reserved for future standard use>",
-    [11] "<reserved for future standard use>",
-    [12] "<reserved for future standard use>",
-    [13] "<reserved for future standard use>",
-    [14] "<reserved for future standard use>",
-    [15] "<reserved for future standard use>",
+    [0]  = "user software interrupt",
+    [1]  = "supervisor software interrupt",
+    [2]  = "<reserved for future standard use>",
+    [3]  = "<reserved for future standard use>",
+    [4]  = "user timer interrupt",
+    [5]  = "supervisor timer interrupt",
+    [6]  = "<reserved for future standard use>",
+    [7]  = "<reserved for future standard use>",
+    [8]  = "user external interrupt",
+    [9]  = "supervisor external interrupt",
+    [10] = "<reserved for future standard use>",
+    [11] = "<reserved for future standard use>",
+    [12] = "<reserved for future standard use>",
+    [13] = "<reserved for future standard use>",
+    [14] = "<reserved for future standard use>",
+    [15] = "<reserved for future standard use>",
   };
   static const char *nointr_desc[16] = {
-    [0] "instruction address misaligned",
-    [1] "instruction access fault",
-    [2] "illegal instruction",
-    [3] "breakpoint",
-    [4] "load address misaligned",
-    [5] "load access fault",
-    [6] "store/AMO address misaligned",
-    [7] "store/AMO access fault",
-    [8] "environment call from U-mode",
-    [9] "environment call from S-mode",
-    [10] "<reserved for future standard use>",
-    [11] "<reserved for future standard use>",
-    [12] "instruction page fault",
-    [13] "load page fault",
-    [14] "<reserved for future standard use>",
-    [15] "store/AMO page fault",
+    [0]  = "instruction address misaligned",
+    [1]  = "instruction access fault",
+    [2]  = "illegal instruction",
+    [3]  = "breakpoint",
+    [4]  = "load address misaligned",
+    [5]  = "load access fault",
+    [6]  = "store/AMO address misaligned",
+    [7]  = "store/AMO access fault",
+    [8]  = "environment call from U-mode",
+    [9]  = "environment call from S-mode",
+    [10] = "<reserved for future standard use>",
+    [11] = "<reserved for future standard use>",
+    [12] = "instruction page fault",
+    [13] = "load page fault",
+    [14] = "<reserved for future standard use>",
+    [15] = "store/AMO page fault",
   };
   uint64 interrupt = stval & 0x8000000000000000L;
   uint64 code = stval & ~0x8000000000000000L;

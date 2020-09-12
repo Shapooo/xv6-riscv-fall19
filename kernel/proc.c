@@ -128,7 +128,7 @@ static void
 freeproc(struct proc *p)
 {
   if(p->tf)
-    kfree((void*)p->tf);
+    kderef((void*)p->tf);
   p->tf = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);

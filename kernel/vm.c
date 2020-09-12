@@ -15,7 +15,32 @@ extern char etext[];  // kernel.ld sets this to end of kernel code.
 
 extern char trampoline[]; // trampoline.S
 
-void print(pagetable_t);
+void
+vmprint_recur(int level, pagetable_t pt)
+{
+  for (int i = 0; i < 512; ++i) {
+    pte_t pte = pt[i];
+    if (pte & PTE_V) {
+
+      for (int i = 0; i <= level; ++i) {
+        printf(" ..");
+      }
+      printf("%d: pte %p pa %p\n", i, pte, PTE2PA(pte));
+
+      if ((pte & (PTE_R | PTE_W | PTE_X)) == 0) {
+        uint64 child = PTE2PA(pte);
+        vmprint_recur(level + 1, (pagetable_t)child);
+      }
+    }
+  }
+}
+
+void
+vmprint(pagetable_t pt)
+{
+  printf("page table %p\n", pt);
+  vmprint_recur(0, pt);
+}
 
 /*
  * create a direct-map page table for the kernel and
@@ -138,7 +163,7 @@ kvmpa(uint64 va)
   uint64 off = va % PGSIZE;
   pte_t *pte;
   uint64 pa;
-  
+
   pte = walk(kernel_pagetable, va, 0);
   if(pte == 0)
     panic("kvmpa");
@@ -174,6 +199,26 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
   return 0;
 }
 
+// remap one pages, va and pa must be page aligned
+// if there is physical addr mapped to va, return it, or return zero
+uint64
+remappage(pagetable_t pagetable, uint64 va, uint64 pa, int perm)
+{
+  uint64 retpa;
+  pte_t* pte;
+
+  if (va % PGSIZE || pa % PGSIZE)
+    panic("remappage");
+
+  if ((pte = walk(pagetable, va, 0)) == 0)
+    return -1;
+  if ((retpa = PTE2PA(*pte)) != 0)
+    kderef((void*)retpa);
+  *pte = PA2PTE(pa) | perm | PTE_V;
+
+  return retpa;
+}
+
 // Remove mappings from a page table. The mappings in
 // the given range must exist. Optionally free the
 // physical memory.
@@ -197,7 +242,7 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 size, int do_free)
       panic("uvmunmap: not a leaf");
     if(do_free){
       pa = PTE2PA(*pte);
-      kfree((void*)pa);
+      kderef((void*)pa);
     }
     *pte = 0;
     if(a == last)
@@ -256,7 +301,7 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
     }
     memset(mem, 0, PGSIZE);
     if(mappages(pagetable, a, PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
-      kfree(mem);
+      kderef(mem);
       uvmdealloc(pagetable, a, oldsz);
       return 0;
     }
@@ -298,7 +343,7 @@ freewalk(pagetable_t pagetable)
       panic("freewalk: leaf");
     }
   }
-  kfree((void*)pagetable);
+  kderef((void*)pagetable);
 }
 
 // Free user memory pages,
@@ -319,29 +364,25 @@ uvmfree(pagetable_t pagetable, uint64 sz)
 int
 uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 {
-  pte_t *pte;
+  pte_t* pte;
   uint64 pa, i;
   uint flags;
-  char *mem;
 
-  for(i = 0; i < sz; i += PGSIZE){
-    if((pte = walk(old, i, 0)) == 0)
+  for (i = 0; i < sz; i += PGSIZE) {
+    if ((pte = walk(old, i, 0)) == 0)
       panic("uvmcopy: pte should exist");
-    if((*pte & PTE_V) == 0)
+    if ((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
-    flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
+    kref((void*)pa);
+    flags = (PTE_FLAGS(*pte)) & (~PTE_W);
+    *pte = *pte & (~PTE_W);
+    if (mappages(new, i, PGSIZE, pa, flags) != 0)
       goto err;
-    memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
-      kfree(mem);
-      goto err;
-    }
   }
   return 0;
 
- err:
+err:
   uvmunmap(new, 0, i, 1);
   return -1;
 }
@@ -352,30 +393,39 @@ void
 uvmclear(pagetable_t pagetable, uint64 va)
 {
   pte_t *pte;
-  
+
   pte = walk(pagetable, va, 0);
   if(pte == 0)
     panic("uvmclear");
   *pte &= ~PTE_U;
 }
 
+#include "proc.h"
 // Copy from kernel to user.
 // Copy len bytes from src to virtual address dstva in a given page table.
 // Return 0 on success, -1 on error.
 int
-copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
+copyout(pagetable_t pagetable, uint64 dstva, char* src, uint64 len)
 {
   uint64 n, va0, pa0;
+  pte_t* pte;
 
-  while(len > 0){
+  while (len > 0) {
     va0 = PGROUNDDOWN(dstva);
+
+    if (va0 >= MAXVA)
+      return -1;
+    if ((pte = walk(pagetable, va0, 0)) && (*pte & PTE_V) &&
+        (*pte & PTE_W) == 0 && (cow_handle(pagetable, va0) < 0))
+      return -1;
+
     pa0 = walkaddr(pagetable, va0);
-    if(pa0 == 0)
+    if (pa0 == 0)
       return -1;
     n = PGSIZE - (dstva - va0);
-    if(n > len)
+    if (n > len)
       n = len;
-    memmove((void *)(pa0 + (dstva - va0)), src, n);
+    memmove((void*)(pa0 + (dstva - va0)), src, n);
 
     len -= n;
     src += n;
@@ -450,4 +500,30 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+}
+
+// va must be page aligned
+// TODO: check origin permission of page
+int
+cow_handle(pagetable_t pagetable, uint64 va)
+{
+  int perm;
+  pte_t* pte;
+  void* mem;
+  uint64 pa0;
+
+  va = PGROUNDDOWN(va);
+
+  if ((pte = walk(pagetable, va, 0)) == 0)
+    panic("cow_handle");
+  if ((mem = kalloc()) == 0)
+    return -1;
+
+  pa0 = PTE2PA(*pte);
+  perm = PTE_FLAGS(*pte);
+
+  memmove(mem, (void*)pa0, PGSIZE);
+  remappage(pagetable, va, (uint64)mem, perm | PTE_W);
+
+  return 0;
 }
