@@ -375,8 +375,8 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
       panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
     kref((void*)pa);
-    flags = (PTE_FLAGS(*pte)) & (~PTE_W);
-    *pte = *pte & (~PTE_W);
+    flags = PTE_FLAGS(*pte);
+    flags = W2COW(flags);
     if (mappages(new, i, PGSIZE, pa, flags) != 0)
       goto err;
   }
@@ -400,7 +400,6 @@ uvmclear(pagetable_t pagetable, uint64 va)
   *pte &= ~PTE_U;
 }
 
-#include "proc.h"
 // Copy from kernel to user.
 // Copy len bytes from src to virtual address dstva in a given page table.
 // Return 0 on success, -1 on error.
@@ -415,9 +414,12 @@ copyout(pagetable_t pagetable, uint64 dstva, char* src, uint64 len)
 
     if (va0 >= MAXVA)
       return -1;
-    if ((pte = walk(pagetable, va0, 0)) && (*pte & PTE_V) &&
-        (*pte & PTE_W) == 0 && (cow_handle(pagetable, va0) < 0))
-      return -1;
+    if ((pte = walk(pagetable, va0, 0)) && (*pte & PTE_V) && (*pte & PTE_COW)) {
+      if (*pte & PTE_W)
+        panic("copyout: both COW and W");
+      if (cow_handle(pagetable, va0) < 0)
+        return -1;
+    }
 
     pa0 = walkaddr(pagetable, va0);
     if (pa0 == 0)
@@ -521,9 +523,10 @@ cow_handle(pagetable_t pagetable, uint64 va)
 
   pa0 = PTE2PA(*pte);
   perm = PTE_FLAGS(*pte);
+  perm = COW2W(perm);
 
   memmove(mem, (void*)pa0, PGSIZE);
-  remappage(pagetable, va, (uint64)mem, perm | PTE_W);
+  remappage(pagetable, va, (uint64)mem, perm);
 
   return 0;
 }
