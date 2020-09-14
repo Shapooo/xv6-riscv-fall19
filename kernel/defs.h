@@ -2,6 +2,7 @@
 #define __DEFS_H__
 #include "types.h"
 #include "riscv.h"
+#include "mmap.h"
 
 struct buf;
 struct context;
@@ -57,6 +58,7 @@ struct inode*   nameiparent(char*, char*);
 int             readi(struct inode*, int, uint64, uint, uint);
 void            stati(struct inode*, struct stat*);
 int             writei(struct inode*, int, uint64, uint, uint);
+int             mmap_handle(uint64);
 
 // ramdisk.c
 void            ramdiskinit(void);
@@ -180,6 +182,8 @@ int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
 uint64          remappage(pagetable_t, uint64, uint64, int);
 int             cow_handle(pagetable_t, uint64);
+int             munmap(pagetable_t, struct mmapitem_t *, uint64, uint64, int);
+int             mmapcopy(pagetable_t, pagetable_t, struct mmapitem_t*, struct mmapitem_t*);
 
 // plic.c
 void            plicinit(void);

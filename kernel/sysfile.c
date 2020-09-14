@@ -4,17 +4,17 @@
 // user code, and calls into file.c and fs.c.
 //
 
-#include "types.h"
-#include "riscv.h"
 #include "defs.h"
-#include "param.h"
-#include "stat.h"
-#include "spinlock.h"
-#include "proc.h"
-#include "fs.h"
-#include "sleeplock.h"
-#include "file.h"
 #include "fcntl.h"
+#include "file.h"
+#include "fs.h"
+#include "param.h"
+#include "proc.h"
+#include "riscv.h"
+#include "sleeplock.h"
+#include "spinlock.h"
+#include "stat.h"
+#include "types.h"
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
@@ -480,5 +480,109 @@ sys_pipe(void)
     fileclose(wf);
     return -1;
   }
+  return 0;
+}
+
+uint64 sys_mmap(void)
+{
+  uint64 addr, length, offset;
+  int prot, flags, fd;
+  struct mmapitem_t *mip;
+  int perm = PTE_U;
+  struct proc *p;
+  struct file *f;
+
+  if (argaddr(0, &addr) < 0)
+    return -1;
+  if (argaddr(1, &length) < 0 || addr + length <= addr)
+    return -1;
+  if (argint(2, &prot) < 0)
+    return -1;
+  if (argint(3, &flags) < 0 || (flags != MAP_SHARED && flags != MAP_PRIVATE))
+    return -1;
+  if (argfd(4, &fd, &f) < 0)
+    return -1;
+  if (argaddr(5, &offset) < 0 || offset % PGSIZE)
+    return -1;
+
+  p = myproc();
+
+  if (prot & PROT_READ) {
+    if (f->readable == 0)
+      return -1;
+    perm |= PTE_R;
+  }
+  if (prot & PROT_WRITE) {
+    if (f->writable == 0 && flags != MAP_PRIVATE)
+      return -1;
+    perm |= PTE_W;
+  }
+
+  if (flags == MAP_SHARED) {
+    /* search if the mmap exist */
+    for (mip = p->mmap; mip < p->mmap + MAXMMAP; mip ++ ) {
+      if (mip->file == f && mip->flags == MAP_SHARED &&
+          mip->fileoff == offset && mip->vend - mip->vstart == length)
+        return mip->vstart;
+    }
+  }
+
+  /* register the mmap to structure of proc */
+  if (p->mmapend % PGSIZE)
+    panic("sys_mmap");
+  addr = p->mmapend;
+
+  for (mip = p->mmap; mip < p->mmap + MAXMMAP; ++mip)
+    if (mip->vstart == 0)
+      break;
+  if (mip >= p->mmap + MAXMMAP)
+    return -1;
+
+  mip->vstart = addr;
+  mip->vend = addr + length;
+  p->mmapend = PGROUNDUP(mip->vend);
+  mip->file = filedup(p->ofile[fd]);
+  mip->prot = prot;
+  mip->fileoff = offset;
+  mip->flags = flags;
+
+  return addr;
+}
+
+uint64
+sys_munmap(void)
+{
+  uint64 addr, length;
+  struct proc* p;
+
+  if (argaddr(0, &addr) < 0 || addr % PGSIZE)
+    return -1;
+  if (argaddr(1, &length) < 0 || addr + length < addr)
+    return -1;
+
+  p = myproc();
+  struct mmapitem_t* mip;
+  /* search existed mmap item */
+  for (mip = p->mmap; mip < p->mmap + MAXMMAP; mip++) {
+    if ((addr >= mip->vstart) &&
+        ((addr + length) <= mip->vend)) {
+      break;
+    }
+  }
+  if (mip >= p->mmap + MAXMMAP)
+    return -1;
+
+  if (munmap(p->pagetable, mip, addr, addr + length, mip->flags & MAP_SHARED) < 0)
+    return -1;
+
+  if (addr == mip->vstart)
+    mip->vstart = PGROUNDUP(addr + length);
+  if (PGROUNDUP(addr + length) == PGROUNDUP(mip->vend))
+    mip->vend = addr;
+  if (mip->vstart == mip->vend) {
+    fileclose(mip->file);
+    mip->vstart = 0;
+  }
+
   return 0;
 }

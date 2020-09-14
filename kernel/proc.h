@@ -1,5 +1,6 @@
 #ifndef __PROC_H__
 #define __PROC_H__
+#include "mmap.h"
 #include "param.h"
 #include "riscv.h"
 #include "spinlock.h"
@@ -109,5 +110,7 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  struct mmapitem_t mmap[MAXMMAP];  // mmapitems
+  uint64 mmapend;
 };
 #endif // __PROC_H__

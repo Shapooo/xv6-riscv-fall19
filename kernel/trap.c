@@ -69,19 +69,30 @@ usertrap(void)
 
     syscall();
   } else if ((which_dev = devintr()) != 0) {
-    /* Exception Code 15: Store/AMO page fault */
-  } else if (r_scause() == 15) {
+  } else {
+    int scause = r_scause();
     uint64 fault_addr = r_stval();
-    if (fault_addr >= p->sz || cow_handle(p->pagetable, fault_addr) < 0) {
+    // Exception Code 15: Store/AMO page fault
+    if (scause == 15 && fault_addr < p->sz) {
+      if (cow_handle(p->pagetable, fault_addr) < 0) {
+        printf("cow_handle failed\n");
+        goto bad;
+      }
+    } else if ((scause == 13 || scause == 15) && fault_addr >= MMAP_MIN_ADDR &&
+               fault_addr < p->mmapend) {
+      if (mmap_handle(fault_addr) < 0) {
+        printf("Mmap_handle failed\n");
+        goto bad;
+      }
+    } else {
+    bad:
+      printf("usertrap(): unexpected scause %d (%s) pid=%d\n",
+             r_scause(),
+             scause_desc(r_scause()),
+             p->pid);
+      printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
       p->killed = 1;
     }
-  } else {
-    printf("usertrap(): unexpected scause %p (%s) pid=%d\n",
-           r_scause(),
-           scause_desc(r_scause()),
-           p->pid);
-    printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
-    p->killed = 1;
   }
 
   if (p->killed)

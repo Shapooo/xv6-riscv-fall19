@@ -130,6 +130,15 @@ freeproc(struct proc *p)
   if(p->tf)
     kderef((void*)p->tf);
   p->tf = 0;
+
+  struct mmapitem_t *mp = p->mmap;
+  for (; mp < p->mmap + MAXMMAP; ++mp) {
+    if (mp->vstart) {
+      munmap(p->pagetable, mp, mp->vstart, mp->vend, 1);
+      mp->vstart = 0;
+    }
+  }
+
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
   p->pagetable = 0;
@@ -141,6 +150,7 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+  p->mmapend = 0;
 }
 
 // Create a page table for a given process,
@@ -256,6 +266,19 @@ fork(void)
     release(&np->lock);
     return -1;
   }
+
+  struct mmapitem_t* oldmp = p->mmap;
+  struct mmapitem_t* newmp = np->mmap;
+  for (; oldmp < p->mmap + MAXMMAP; ++oldmp, ++newmp) {
+    if (oldmp->vstart) {
+      if (mmapcopy(p->pagetable, np->pagetable, oldmp, newmp) < 0) {
+        freeproc(np);
+        release(&np->lock);
+        return -1;
+      }
+    }
+  }
+  np->mmapend = p->mmapend;
   np->sz = p->sz;
 
   np->parent = p;
@@ -664,11 +687,11 @@ void
 procdump(void)
 {
   static char *states[] = {
-  [UNUSED]    "unused",
-  [SLEEPING]  "sleep ",
-  [RUNNABLE]  "runble",
-  [RUNNING]   "run   ",
-  [ZOMBIE]    "zombie"
+  [UNUSED]   = "unused",
+  [SLEEPING] = "sleep ",
+  [RUNNABLE] = "runble",
+  [RUNNING]  = "run   ",
+  [ZOMBIE]   = "zombie"
   };
   struct proc *p;
   char *state;

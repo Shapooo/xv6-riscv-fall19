@@ -27,7 +27,7 @@ int ntas();
 int crash(const char*, int);
 int mount(char*, char *);
 int umount(char*);
-void* mmap(void*, int, int, int, int, int);
+void* mmap(void*, uint64, int, int, int, uint64);
 int munmap(void*, int);
 
 // ulib.c
