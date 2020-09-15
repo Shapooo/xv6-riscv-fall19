@@ -581,7 +581,7 @@ sys_munmap(void)
   }
   if (PGROUNDUP(addr + length) == PGROUNDUP(mip->vend))
     mip->vend = addr;
-  if (mip->vstart == mip->vend) {
+  if (mip->vstart >= mip->vend) {
     fileclose(mip->file);
     mip->vstart = 0;
   }

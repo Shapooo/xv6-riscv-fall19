@@ -58,13 +58,15 @@ munmap(pagetable_t pagetable,
        uint64 vend,
        int do_update)
 {
-  uint64 a;
+  uint64 a, wsize;
   uint64 last = PGROUNDUP(vend);
 
   if (vaddr % PGSIZE || mip->fileoff % PGSIZE)
     panic("munmap: un-aligned");
   if (vaddr > vend)
     return -1;
+
+  if (last > mip->vend) last = mip->vend;
 
   if (do_update) {
     begin_op(mip->file->ip->dev);
@@ -74,8 +76,10 @@ munmap(pagetable_t pagetable,
   uint fileoff = mip->fileoff + vaddr - mip->vstart;
   for (a = vaddr; a < last; a += PGSIZE, fileoff += PGSIZE) {
     if (do_update) {
-      writei(mip->file->ip, 1, a, fileoff, PGSIZE);
+      wsize = (last - a < PGSIZE) ? (last - a) : PGSIZE;
+      writei(mip->file->ip, 1, a, fileoff, wsize);
     }
+
     uvmunmap(pagetable, a, PGSIZE, 1);
   }
   if (do_update) {
