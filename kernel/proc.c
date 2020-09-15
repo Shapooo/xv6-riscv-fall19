@@ -127,6 +127,7 @@ found:
 static void
 freeproc(struct proc *p)
 {
+  int ishold;
   if(p->tf)
     kderef((void*)p->tf);
   p->tf = 0;
@@ -134,7 +135,16 @@ freeproc(struct proc *p)
   struct mmapitem_t *mp = p->mmap;
   for (; mp < p->mmap + MAXMMAP; ++mp) {
     if (mp->vstart) {
+      /* todo: may lead to bugs... */
+      if ((ishold = holding(&p->lock)) != 0) {
+        release(&p->lock);
+        release(&p->parent->lock);
+      }
       munmap(p->pagetable, mp, mp->vstart, mp->vend, 1);
+      if (ishold != 0) {
+        acquire(&p->lock);
+        acquire(&p->parent->lock);
+      }
       mp->vstart = 0;
     }
   }

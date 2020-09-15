@@ -105,7 +105,8 @@ mmapcopy(pagetable_t oldpt,
     if (walkaddr(oldpt, va)) {
       if (oldmp->flags == MAP_PRIVATE) {
         if ((pa = kalloc()) < 0) {
-          panic("mmapcopy");    /* todo: handle fail */
+          panic("mmapcopy");
+          /* todo: handle fail situation */
         }
         copyout(oldpt, va, pa, PGSIZE);
       } else {

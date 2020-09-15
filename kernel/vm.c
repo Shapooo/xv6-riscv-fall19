@@ -506,7 +506,6 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 }
 
 // va must be page aligned
-// TODO: check origin permission of page
 int
 cow_handle(pagetable_t pagetable, uint64 va)
 {
