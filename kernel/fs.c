@@ -509,7 +509,7 @@ writei(struct inode *ip, int user_src, uint64 src, uint off, uint n)
     iupdate(ip);
   }
 
-  return n;
+  return tot;
 }
 
 // Directories
