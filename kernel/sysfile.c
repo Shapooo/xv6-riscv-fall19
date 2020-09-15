@@ -575,8 +575,10 @@ sys_munmap(void)
   if (munmap(p->pagetable, mip, addr, addr + length, mip->flags & MAP_SHARED) < 0)
     return -1;
 
-  if (addr == mip->vstart)
+  if (addr == mip->vstart) {
     mip->vstart = PGROUNDUP(addr + length);
+    mip->fileoff += PGROUNDUP(length);
+  }
   if (PGROUNDUP(addr + length) == PGROUNDUP(mip->vend))
     mip->vend = addr;
   if (mip->vstart == mip->vend) {
