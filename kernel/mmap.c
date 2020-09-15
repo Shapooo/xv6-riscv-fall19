@@ -109,8 +109,9 @@ mmapcopy(pagetable_t oldpt,
     if ((oldpa = (void *)walkaddr(oldpt, va)) != 0) {
       if (oldmp->flags == MAP_PRIVATE) {
         if ((newpa = kalloc()) < 0) {
-          panic("mmapcopy");
-          /* todo: handle fail situation */
+          uvmunmap(newpt, newmp->vstart, va - newmp->vstart, 1);
+          newmp->vstart = 0;
+          return -1;
         }
         memmove(newpa, oldpa, PGSIZE);
       } else {
