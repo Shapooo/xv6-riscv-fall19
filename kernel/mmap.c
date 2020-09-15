@@ -92,7 +92,7 @@ mmapcopy(pagetable_t oldpt,
          struct mmapitem_t* newmp)
 {
   uint64 va;
-  void* pa;
+  void *oldpa, *newpa;
   if (oldmp->vstart % PGSIZE)
     panic("mmapcopy");
   newmp->vstart = oldmp->vstart;
@@ -102,17 +102,18 @@ mmapcopy(pagetable_t oldpt,
   newmp->flags = oldmp->flags;
   newmp->prot = oldmp->prot;
   for (va = oldmp->vstart; va < oldmp->vend; va += PGSIZE) {
-    if (walkaddr(oldpt, va)) {
+    if ((oldpa = (void *)walkaddr(oldpt, va)) != 0) {
       if (oldmp->flags == MAP_PRIVATE) {
-        if ((pa = kalloc()) < 0) {
+        if ((newpa = kalloc()) < 0) {
           panic("mmapcopy");
           /* todo: handle fail situation */
         }
-        copyout(oldpt, va, pa, PGSIZE);
+        memmove(newpa, oldpa, PGSIZE);
       } else {
-        pa = (void*)walkaddr(oldpt, va);
+        newpa = oldpa;
+        kref(oldpa);
       }
-      mappages(newpt, va, PGSIZE, (uint64)pa, MMAPPROT2PTE(newmp->prot));
+      mappages(newpt, va, PGSIZE, (uint64)newpa, MMAPPROT2PTE(newmp->prot));
     }
   }
 
