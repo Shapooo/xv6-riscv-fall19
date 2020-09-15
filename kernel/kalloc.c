@@ -116,10 +116,12 @@ kderef(void* pa)
   uint index = ((uint64)pa - (uint64)end) >> 12;
   uint to_be_free = 0;
 
+
+  if (kmem.ref_count[index] < 1)
+    panic("kderef");
+
   acquire(&kmem.lock);
   kmem.ref_count[index]--;
-  if (kmem.ref_count[index] < 0)
-    panic("kderef");
   if (kmem.ref_count[index] == 0)
     to_be_free = 1;
   release(&kmem.lock);
